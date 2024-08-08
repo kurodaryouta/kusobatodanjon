@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>くそばとだんじょん</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        .setup-screen, .battle-screen {
+            background-color: #ffffff;
+            border: 1px solid #ddd;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 20px auto;
+            text-align: center;
+        }
+        .button {
+            font-size: 1em;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: #fff;
+            cursor: pointer;
+            margin: 5px;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #2980b9;
+        }
+        #skillDescription {
+            margin-top: 10px;
+            font-size: 1em;
+        }
+        #itemStatus {
+            font-size: 1em;
+            margin-top: 10px;
+        }
+        #battleResult {
+            font-size: 1.2em;
+            color: #e74c3c;
+            margin-bottom: 10px;
+        }
+        #playerHP, #battleEnemyHP {
+            font-size: 1.1em;
+            margin: 5px 0;
+        }
+        #restartButton {
+            display: none;
+            background-color: #e67e22;
+        }
+        #restartButton:hover {
+            background-color: #d35400;
+        }
+    </style>
+</head>
+<body>
+    <div id="setupScreen" class="setup-screen">
+        <h1>くそばとだんじょん</h1>
+        <h2>能力値を設定</h2>
+        <div class="input-box">
+            <label for="totalPoints">振り分けるポイント:</label>
+            <input type="number" id="totalPoints" value="75" disabled>
+        </div>
+        <div class="input-box">
+            <label for="playerAttack">攻撃力:</label>
+            <input type="number" id="playerAttack" value="10" min="0" max="75" onchange="checkPoints()">
+        </div>
+        <div class="input-box">
+            <label for="playerMagic">魔法力:</label>
+            <input type="number" id="playerMagic" value="10" min="0" max="75" onchange="checkPoints()">
+        </div>
+        <div class="input-box">
+            <label for="playerDefense">防御力:</label>
+            <input type="number" id="playerDefense" value="10" min="0" max="75" onchange="checkPoints()">
+        </div>
+        <div class="input-box">
+            <label for="playerSkill">スキルを選択:</label>
+            <select id="playerSkill" onchange="updateSkillDescription()">
+                <option value="fireball">ファイアボール</option>
+                <option value="iceArrow">氷の矢</option>
+                <option value="heal">治癒</option>
+                <option value="lightningStrike">雷撃</option>
+                <option value="earthquake">地震</option>
+                <option value="attackBoost">攻撃力上昇</option>
+            </select>
+        </div>
+        <div id="skillDescription"></div>
+        <button class="button" onclick="startGame()">ゲーム開始</button>
+    </div>
+
+    <div id="battleScreen" class="battle-screen" style="display:none;">
+        <h2 id="battleEnemyName"></h2>
+        <p id="battleEnemyHP"></p>
+        <p id="playerHP">プレイヤーHP: 100</p>
+        <div class="result" id="battleResult"></div>
+        <div>
+            <button class="button" id="attackButton" onclick="attack()">攻撃</button>
+            <button class="button" id="defendButton" onclick="defend()">防御</button>
+            <button class="button" id="skillButton" onclick="useSkill()">スキル使用</button>
+            <button class="button" id="itemButton" onclick="useItem()">アイテム使用</button>
+            <button class="button" id="restartButton" onclick="restartGame()">リスタート</button>
+        </div>
+        <div id="itemStatus"></div>
+    </div>
+
+    <script>
+        let player = { name: "プレイヤー", attack: 0, hp: 100, magic: 0, defense: 0, items: { healPotion: 3, attackPotion: 2, defensePotion: 2 }, skills: {} };
+        let enemies = [];
+        let currentEnemyIndex = 0;
+        let defending = false;
+
+        let skillCooldowns = {
+            fireball: 0,
+            iceArrow: 0,
+            heal: 0,
+            lightningStrike: 0,
+            earthquake: 0,
+            attackBoost: 0
+        };
+
+        const COOLDOWN_TIME = 3;
+
+        function checkPoints() {
+            const attackPoints = parseInt(document.getElementById('playerAttack').value) || 0;
+            const magicPoints = parseInt(document.getElementById('playerMagic').value) || 0;
+            const defensePoints = parseInt(document.getElementById('playerDefense').value) || 0;
+
+            if (attackPoints + magicPoints + defensePoints > 75) {
+                alert(`攻撃力、魔法力、防御力の合計は75を超えてはいけません。`);
+                document.getElementById('playerAttack').value = 75 - magicPoints - defensePoints;
+            }
+        }
+
+        function updateSkillDescription() {
+            const skill = document.getElementById('playerSkill').value;
+            let description = "";
+
+            if (skill === "fireball") {
+                description = "ファイアボール: 強力な火の玉で敵に大ダメージを与える。";
+            } else if (skill === "iceArrow") {
+                description = "氷の矢: 冷たい矢で敵に中ダメージを与える。";
+            } else if (skill === "heal") {
+                description = "治癒: 自分のHPを回復する。";
+            } else if (skill === "lightningStrike") {
+                description = "雷撃: 強力な雷で敵に大ダメージを与える。";
+            } else if (skill === "earthquake") {
+                description = "地震: 地面を揺らして敵全体に大ダメージを与える。";
+            } else if (skill === "attackBoost") {
+                description = "攻撃力上昇: 魔法力に応じて攻撃力を一時的に上昇させる。";
+            }
+
+            document.getElementById('skillDescription').textContent = description;
+        }
+
+        function startGame() {
+            const attack = parseInt(document.getElementById('playerAttack').value) || 0;
+            const magic = parseInt(document.getElementById('playerMagic').value) || 0;
+            const defense = parseInt(document.getElementById('playerDefense').value) || 0;
+            const skill = document.getElementById('playerSkill').value;
+
+            if (attack + magic + defense > 75) {
+                alert(`攻撃力、魔法力、防御力の合計は75を超えてはいけません。`);
+                return;
+            }
+
+            player.attack = attack;
+            player.magic = magic;
+            player.defense = defense;
+            player.skills.selectedSkill = skill;
+
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('battleScreen').style.display = 'block';
+
+            setupGame();
+        }
+
+        function setupGame() {
+            generateEnemies();
+            startBattle(currentEnemyIndex);
+        }
+
+        function generateEnemies() {
+            for (let i = 1; i <= 15; i++) {
+                enemies.push({
+                    name: `敵レベル${i}`,
+                    attack: 5 + i * 2,
+                    hp: 50 + i * 10
+                });
+            }
+        }
+
+        function startBattle(index) {
+            if (index >= enemies.length) {
+                document.getElementById('battleResult').textContent = "すべての敵を倒しました！";
+                disableActionButtons();
+                document.getElementById('restartButton').style.display = 'block';
+                return;
+            }
+
+            const enemy = enemies[index];
+            document.getElementById('battleEnemyName').textContent = enemy.name;
+            document.getElementById('battleEnemyHP').textContent = `HP: ${enemy.hp}`;
+            document.getElementById('battleResult').textContent = "";
+
+            updateCooldowns(); // クールタイムの更新
+        }
+
+        function attack() {
+            const enemy = enemies[currentEnemyIndex];
+            let damage = calculateDamage(player.attack);
+
+            if (defending) {
+                damage = Math.max(0, damage - calculateDefense(player.defense));
+                defending = false;
+            }
+
+            enemy.hp -= damage;
+            document.getElementById('battleResult').textContent = `${player.name}が${enemy.name}に${damage}のダメージを与えた！`;
+            document.getElementById('battleEnemyHP').textContent = `HP: ${enemy.hp}`;
+
+            if (enemy.hp <= 0) {
+                document.getElementById('battleResult').textContent += ` ${enemy.name}を倒した！`;
+                levelUp();
+                currentEnemyIndex++;
+                resetAttackBoost(); // 攻撃力をリセット
+                if (currentEnemyIndex < enemies.length) {
+                    setTimeout(() => {
+                        startBattle(currentEnemyIndex);
+                    }, 1000);
+                } else {
+                    document.getElementById('battleResult').textContent += " すべての敵を倒しました！";
+                    disableActionButtons();
+                    document.getElementById('restartButton').style.display = 'block';
+                }
+            } else {
+                enemyAttack();
+            }
+
+            updateCooldowns(); // クールタイムの更新
+        }
+
+        function defend() {
+            defending = true;
+            document.getElementById('battleResult').textContent = `${player.name}は防御姿勢を取った！`;
+            enemyAttack();
+        }
+
+        function useSkill() {
+            const selectedSkill = player.skills.selectedSkill;
+            performSkill(selectedSkill);
+        }
+
+        function useItem() {
+            if (player.items.healPotion > 0) {
+                player.hp = Math.min(player.hp + 30, 100);
+                player.items.healPotion--;
+                document.getElementById('battleResult').textContent = `${player.name}は回復薬を使ってHPを回復した。残り回復薬: ${player.items.healPotion}`;
+                document.getElementById('playerHP').textContent = `プレイヤーHP: ${player.hp}`;
+            } else {
+                document.getElementById('battleResult').textContent = "回復薬がもうありません！";
+            }
+
+            updateCooldowns(); // クールタイムの更新
+        }
+
+        function performSkill(selectedSkill) {
+            if (skillCooldowns[selectedSkill] > 0) {
+                alert(`${selectedSkill}はまだクールタイム中です。あと${skillCooldowns[selectedSkill]}ターン待ってください。`);
+                return;
+            }
+
+            const enemy = enemies[currentEnemyIndex];
+            let skillDamage = player.magic;
+
+            if (selectedSkill === "fireball") {
+                skillDamage += 20;
+                skillCooldowns.fireball = COOLDOWN_TIME;
+            } else if (selectedSkill === "iceArrow") {
+                skillDamage += 10;
+                skillCooldowns.iceArrow = COOLDOWN_TIME;
+            } else if (selectedSkill === "heal") {
+                player.hp = Math.min(player.hp + 20, 100);
+                skillDamage = 0;
+                document.getElementById('battleResult').textContent = `${player.name}は治癒を使い、HPを回復した！`;
+                skillCooldowns.heal = COOLDOWN_TIME;
+            } else if (selectedSkill === "lightningStrike") {
+                skillDamage += 25;
+                skillCooldowns.lightningStrike = COOLDOWN_TIME;
+            } else if (selectedSkill === "earthquake") {
+                skillDamage += 30;
+                skillCooldowns.earthquake = COOLDOWN_TIME;
+            } else if (selectedSkill === "attackBoost") {
+                player.attack += player.magic * 0.5; // 魔法力に応じた攻撃力上昇
+                document.getElementById('battleResult').textContent = `${player.name}の攻撃力が${player.magic * 0.5}ポイント上昇した！`;
+                skillDamage = 0;
+                skillCooldowns.attackBoost = COOLDOWN_TIME;
+            }
+
+            if (skillDamage > 0) {
+                enemy.hp -= skillDamage;
+                document.getElementById('battleResult').textContent = `${player.name}が${enemy.name}にスキルを使い、${skillDamage}のダメージを与えた！`;
+                document.getElementById('battleEnemyHP').textContent = `HP: ${enemy.hp}`;
+            }
+
+            if (enemy.hp <= 0) {
+                document.getElementById('battleResult').textContent += ` ${enemy.name}を倒した！`;
+                levelUp();
+                currentEnemyIndex++;
+                resetAttackBoost(); // 攻撃力をリセット
+                if (currentEnemyIndex < enemies.length) {
+                    setTimeout(() => {
+                        startBattle(currentEnemyIndex);
+                    }, 1000);
+                } else {
+                    document.getElementById('battleResult').textContent += " すべての敵を倒しました！";
+                    disableActionButtons();
+                    document.getElementById('restartButton').style.display = 'block';
+                }
+            } else {
+                enemyAttack();
+            }
+
+            updateCooldowns(); // クールタイムの更新
+        }
+
+        function resetAttackBoost() {
+            player.attack = player.attack - player.magic * 0.5;
+        }
+
+        function levelUp() {
+            player.hp = Math.min(player.hp + 10, 100);
+            document.getElementById('playerHP').textContent = `プレイヤーHP: ${player.hp}`;
+        }
+
+        function enemyAttack() {
+            const enemy = enemies[currentEnemyIndex];
+            let damage = calculateDamage(enemy.attack);
+
+            if (defending) {
+                damage = Math.max(0, damage - calculateDefense(player.defense));
+                defending = false;
+            }
+
+            player.hp -= damage;
+            document.getElementById('playerHP').textContent = `プレイヤーHP: ${player.hp}`;
+            document.getElementById('battleResult').textContent = `${enemy.name}が${player.name}に${damage}のダメージを与えた！`;
+
+            if (player.hp <= 0) {
+                document.getElementById('battleResult').textContent = `${player.name}は倒れた！ ゲームオーバー`;
+                disableActionButtons();
+                document.getElementById('restartButton').style.display = 'block';
+            }
+        }
+
+        function calculateDamage(baseAttack) {
+            const randomFactor = Math.floor(Math.random() * 10) + 1;
+            return baseAttack + randomFactor;
+        }
+
+        function calculateDefense(defense) {
+            const baseDefense = 15; // 基準防御力
+            const defenseMultiplier = baseDefense / (baseDefense + defense); // 防御力に応じた減少率
+            return Math.round(1 / defenseMultiplier); // 防御力が高いほどダメージを減少
+        }
+
+        function disableActionButtons() {
+            document.getElementById('attackButton').disabled = true;
+            document.getElementById('defendButton').disabled = true;
+            document.getElementById('skillButton').disabled = true;
+            document.getElementById('itemButton').disabled = true;
+        }
+
+        function restartGame() {
+            location.reload();
+        }
+
+        function updateCooldowns() {
+            for (let skill in skillCooldowns) {
+                if (skillCooldowns[skill] > 0) {
+                    skillCooldowns[skill]--;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
